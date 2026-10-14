@@ -1,9 +1,18 @@
+// BudgetBuddy data model
+//
+// - Business data lives in the `app` schema; secrets (password hashes and
+//   session hashes) live in the private `auth` schema, linked to users only by id.
+// - Every table has an internal auto-increment `rowId` (PK, used for joins and
+//   sorting) and a short public `randId` (6 chars: 3 = day since 2026-01-01 in
+//   base36, 3 = random). Only `randId` is ever exposed by the API.
+
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  schemas  = ["app", "auth"]
 }
 
 enum AccountType {
@@ -11,81 +20,149 @@ enum AccountType {
   BANK
   CARD
   DIGITAL_WALLET
+
+  @@schema("app")
 }
 
 enum TransactionType {
   INCOME
   EXPENSE
+
+  @@schema("app")
 }
 
+// ───────────────────────────── app schema ─────────────────────────────
+
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  rowId     BigInt   @id @default(autoincrement())
+  randId    String   @unique @db.VarChar(6)
+  email     String   @unique
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  credential   Credential?
+  sessions     Session[]
   accounts     Account[]
   categories   Category[]
   transactions Transaction[]
-  sessions     Session[]
-}
+  budgets      Budget[]
 
-model Session {
-  id                String   @id @default(cuid())
-  sessionTokenHash String   @unique
-  userId           String
-  expiresAt        DateTime
-  createdAt        DateTime @default(now())
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
+  @@map("users")
+  @@schema("app")
 }
 
 model Account {
-  id          String        @id @default(cuid())
-  userId      String
-  name        String
-  type        AccountType @default(CASH)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rowId     BigInt      @id @default(autoincrement())
+  randId    String      @unique @db.VarChar(6)
+  userRowId BigInt
+  name      String
+  type      AccountType @default(CASH)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user         User          @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
   transactions Transaction[]
 
-  @@index([userId])
+  @@index([userRowId])
+  @@map("accounts")
+  @@schema("app")
 }
 
 model Category {
-  id          String       @id @default(cuid())
-  userId      String
-  name        String
-  color       String?
-  icon        String?
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  rowId     BigInt   @id @default(autoincrement())
+  randId    String   @unique @db.VarChar(6)
+  userRowId BigInt
+  name      String
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  @@unique([userId, name])
-  @@index([userId])
+  user         User          @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
+
+  @@unique([userRowId, name])
+  @@index([userRowId])
+  @@map("categories")
+  @@schema("app")
 }
 
 model Transaction {
-  id              String          @id @default(cuid())
-  userId          String
-  accountId       String
-  categoryId      String?
+  rowId           BigInt          @id @default(autoincrement())
+  randId          String          @unique @db.VarChar(6)
+  userRowId       BigInt
+  accountRowId    BigInt
+  categoryRowId   BigInt?
   type            TransactionType
-  amountCents     Int
+  amount          BigInt // Toman, always positive; `type` gives the sign
   transactionDate DateTime
-  description      String?
+  description     String?
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account         Account         @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  category        Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  @@index([userId])
-  @@index([accountId])
-  @@index([categoryId])
+  user     User      @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
+  account  Account   @relation(fields: [accountRowId], references: [rowId], onDelete: Cascade)
+  category Category? @relation(fields: [categoryRowId], references: [rowId], onDelete: SetNull)
+
+  @@index([userRowId, transactionDate])
+  @@index([accountRowId])
+  @@index([categoryRowId])
+  @@map("transactions")
+  @@schema("app")
+}
+
+model Budget {
+  rowId         BigInt   @id @default(autoincrement())
+  randId        String   @unique @db.VarChar(6)
+  userRowId     BigInt
+  categoryRowId BigInt
+  month         String   @db.VarChar(7) // YYYY-MM
+  limitAmount   BigInt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user     User     @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
+  category Category @relation(fields: [categoryRowId], references: [rowId], onDelete: Cascade)
+
+  @@unique([userRowId, categoryRowId, month])
+  @@index([userRowId])
+  @@map("budgets")
+  @@schema("app")
+}
+
+// ───────────────────────────── auth schema ────────────────────────────
+
+model Credential {
+  rowId        BigInt   @id @default(autoincrement())
+  userRowId    BigInt   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
+
+  @@map("credentials")
+  @@schema("auth")
+}
+
+model Session {
+  rowId      BigInt   @id @default(autoincrement())
+  randId     String   @unique @db.VarChar(6)
+  userRowId  BigInt
+  tokenHash  String   @unique @db.Char(64) // sha256(token), raw token only lives in the cookie
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+  expiresAt  DateTime // lastUsedAt + 24h (sliding)
+  rotatedAt  DateTime? // set once the session was replaced; it then only lives for a short grace period
+  userAgent  String?
+  ip         String?
+
+  user User @relation(fields: [userRowId], references: [rowId], onDelete: Cascade)
+
+  @@index([userRowId])
+  @@index([expiresAt])
+  @@map("sessions")
+  @@schema("auth")
 }

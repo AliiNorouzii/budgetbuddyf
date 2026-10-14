@@ -1,47 +1,32 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators';
+import type { AuthUser } from '../auth/session.service';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @Controller('categories')
 export class CategoriesController {
-  constructor(private readonly categoriesService: CategoriesService) {}
-
-  @Post()
-  create(@Body() createCategoryDto: CreateCategoryDto) {
-    return this.categoriesService.create(createCategoryDto);
-  }
+  constructor(private readonly categories: CategoriesService) {}
 
   @Get()
-  findAll(@Query('userId') userId: string) {
-    return this.categoriesService.findAll(userId);
+  findAll(@CurrentUser() user: AuthUser) {
+    return this.categories.findAll(user.rowId);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string, @Query('userId') userId: string) {
-    return this.categoriesService.findOne(id, userId);
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateCategoryDto) {
+    return this.categories.create(user.rowId, dto);
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Query('userId') userId: string,
-    @Body() updateCategoryDto: UpdateCategoryDto,
-  ) {
-    return this.categoriesService.update(id, userId, updateCategoryDto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+    return this.categories.update(user.rowId, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Query('userId') userId: string) {
-    return this.categoriesService.remove(id, userId);
+  @HttpCode(204)
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.categories.remove(user.rowId, id);
   }
 }

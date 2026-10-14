@@ -1,112 +1,62 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Category, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
+
+const toDto = (c: Category) => ({ id: c.randId, name: c.name, color: c.color, icon: c.icon });
+
+function rethrowDuplicate(error: unknown, name?: string): never {
+  if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    throw new ConflictException(`دسته‌بندی «${name}» از قبل وجود دارد.`);
+  }
+  throw error;
+}
 
 @Injectable()
 export class CategoriesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(createCategoryDto: CreateCategoryDto) {
-    const { name, color, icon, userId } = createCategoryDto;
-
-    // ۱. بررسی وجود کاربر
-    const userExists = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-    if (!userExists) {
-      throw new NotFoundException(`کاربری با شناسه ${userId} یافت نشد.`);
-    }
-
-    // ۲. بررسی تکراری نبودن نام دسته‌بندی برای این کاربر
-    const existingCategory = await this.prisma.category.findUnique({
-      where: {
-        userId_name: {
-          userId,
-          name,
-        },
-      },
-    });
-    if (existingCategory) {
-      throw new ConflictException(`دسته‌بندی با نام "${name}" قبلاً برای این کاربر ایجاد شده است.`);
-    }
-
-    // ۳. ایجاد دسته‌بندی جدید
-    return this.prisma.category.create({
-      data: {
-        name,
-        color,
-        icon,
-        userId,
-      },
-    });
+  async findAll(userRowId: bigint) {
+    const categories = await this.prisma.category.findMany({ where: { userRowId }, orderBy: { name: 'asc' } });
+    return categories.map(toDto);
   }
 
-  async findAll(userId: string) {
-    // ۱. بررسی وجود کاربر
-    const userExists = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-    if (!userExists) {
-      throw new NotFoundException(`کاربری با شناسه ${userId} یافت نشد.`);
+  async create(userRowId: bigint, dto: CreateCategoryDto) {
+    const name = dto.name.trim();
+    try {
+      const category = await this.prisma.withRandId((randId) =>
+        this.prisma.category.create({ data: { randId, userRowId, name, color: dto.color, icon: dto.icon } }),
+      );
+      return toDto(category);
+    } catch (error) {
+      rethrowDuplicate(error, name);
     }
-
-    // ۲. بازگرداندن تمام دسته‌بندی‌های کاربر
-    return this.prisma.category.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-    });
   }
 
-  async findOne(id: string, userId: string) {
-    const category = await this.prisma.category.findFirst({
-      where: { id, userId },
-    });
-
-    if (!category) {
-      throw new NotFoundException(`دسته‌بندی مورد نظر با شناسه ${id} برای این کاربر یافت نشد.`);
+  async update(userRowId: bigint, id: string, dto: UpdateCategoryDto) {
+    const category = await this.findOwned(userRowId, id);
+    const name = dto.name?.trim();
+    try {
+      return toDto(
+        await this.prisma.category.update({
+          where: { rowId: category.rowId },
+          data: { name, color: dto.color, icon: dto.icon },
+        }),
+      );
+    } catch (error) {
+      rethrowDuplicate(error, name);
     }
+  }
 
+  async remove(userRowId: bigint, id: string) {
+    const category = await this.findOwned(userRowId, id);
+    await this.prisma.category.delete({ where: { rowId: category.rowId } });
+  }
+
+  async findOwned(userRowId: bigint, id: string) {
+    const category = await this.prisma.category.findFirst({ where: { randId: id, userRowId } });
+    if (!category) throw new NotFoundException('دسته‌بندی موردنظر پیدا نشد.');
     return category;
-  }
-
-  async update(id: string, userId: string, updateCategoryDto: UpdateCategoryDto) {
-    // ۱. ابتدا بررسی می‌کنیم که آیا دسته‌بندی متعلق به این کاربر هست یا خیر
-    const category = await this.findOne(id, userId);
-
-    // ۲. اگر نام قرار است تغییر کند، بررسی کنیم با دیگر نام‌های کاربر تداخل نداشته باشد
-    if (updateCategoryDto.name && updateCategoryDto.name !== category.name) {
-      const existingCategory = await this.prisma.category.findUnique({
-        where: {
-          userId_name: {
-            userId,
-            name: updateCategoryDto.name,
-          },
-        },
-      });
-      if (existingCategory) {
-        throw new ConflictException(`دسته‌بندی با نام "${updateCategoryDto.name}" قبلاً برای این کاربر ثبت شده است.`);
-      }
-    }
-
-    // ۳. بروزرسانی
-    return this.prisma.category.update({
-      where: { id },
-      data: {
-        name: updateCategoryDto.name,
-        color: updateCategoryDto.color,
-        icon: updateCategoryDto.icon,
-      },
-    });
-  }
-
-  async remove(id: string, userId: string) {
-    // ۱. بررسی وجود و مالکیت
-    await this.findOne(id, userId);
-
-    // ۲. حذف فیزیکی دسته‌بندی
-    return this.prisma.category.delete({
-      where: { id },
-    });
   }
 }

@@ -1,47 +1,38 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  Query,
-} from '@nestjs/common';
-import { TransactionsService } from './transactions.service';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { CurrentUser } from '../auth/decorators';
+import type { AuthUser } from '../auth/session.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { ListTransactionsDto, SummaryQueryDto } from './dto/list-transactions.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { TransactionsService } from './transactions.service';
 
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
-
-  @Post()
-  create(@Body() createTransactionDto: CreateTransactionDto) {
-    return this.transactionsService.create(createTransactionDto);
-  }
+  constructor(private readonly transactions: TransactionsService) {}
 
   @Get()
-  findAll(@Query('userId') userId: string) {
-    return this.transactionsService.findAll(userId);
+  findAll(@CurrentUser() user: AuthUser, @Query() query: ListTransactionsDto) {
+    return this.transactions.findAll(user.rowId, query);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string, @Query('userId') userId: string) {
-    return this.transactionsService.findOne(id, userId);
+  @Get('summary')
+  summary(@CurrentUser() user: AuthUser, @Query() query: SummaryQueryDto) {
+    return this.transactions.summary(user.rowId, query.month);
+  }
+
+  @Post()
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateTransactionDto) {
+    return this.transactions.create(user.rowId, dto);
   }
 
   @Patch(':id')
-  update(
-    @Param('id') id: string,
-    @Query('userId') userId: string,
-    @Body() updateTransactionDto: UpdateTransactionDto,
-  ) {
-    return this.transactionsService.update(id, userId, updateTransactionDto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: UpdateTransactionDto) {
+    return this.transactions.update(user.rowId, id, dto);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string, @Query('userId') userId: string) {
-    return this.transactionsService.remove(id, userId);
+  @HttpCode(204)
+  remove(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.transactions.remove(user.rowId, id);
   }
 }

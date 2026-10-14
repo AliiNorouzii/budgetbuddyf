@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { api, errorMessage } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,40 +22,23 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:3001/auth/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include", // ارسال و دریافت کوکی
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.message || "خطا در برقراری ارتباط");
-      }
-
-      // هدایت مستقیم و خودکار به داشبورد
-      router.push("/dashboard");
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message || "اطلاعات ورود نامعتبر است");
-    } finally {
+      await api("/auth/login", { method: "POST", body: { email, password } });
+      router.replace("/dashboard");
+    } catch (err) {
+      setError(errorMessage(err));
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4" dir="rtl">
+    <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-right">
+        <CardHeader>
           <CardTitle>ورود به حساب کاربری</CardTitle>
           <CardDescription>برای ورود به BudgetBuddy ایمیل و کلمه عبور خود را وارد کنید.</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4 text-right">
+          <CardContent className="space-y-4">
             {error && (
               <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive">
                 {error}
@@ -65,7 +49,9 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="ali@budgetbuddy.local"
+                dir="ltr"
+                autoComplete="email"
+                placeholder="demo@budgetbuddy.ir"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -76,13 +62,15 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type="password"
+                dir="ltr"
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+          <CardFooter className="mt-4 flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "در حال ورود..." : "ورود"}
             </Button>

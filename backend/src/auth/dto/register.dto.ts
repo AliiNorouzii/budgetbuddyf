@@ -1,14 +1,15 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MaxLength, MinLength } from 'class-validator';
 
 export class RegisterDto {
-  @IsEmail()
+  @IsEmail({}, { message: 'ایمیل معتبر نیست.' })
   email: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(8, { message: 'کلمه عبور باید حداقل ۸ کاراکتر باشد.' })
   password: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'نام را وارد کنید.' })
+  @MaxLength(80)
   name: string;
 }

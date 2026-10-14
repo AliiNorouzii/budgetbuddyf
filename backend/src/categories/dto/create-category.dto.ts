@@ -1,19 +1,17 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsHexColor, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateCategoryDto {
   @IsString()
   @IsNotEmpty({ message: 'نام دسته‌بندی نمی‌تواند خالی باشد.' })
+  @MaxLength(60)
   name: string;
 
-  @IsString()
   @IsOptional()
+  @IsHexColor({ message: 'رنگ باید کد هگز باشد.' })
   color?: string;
 
-  @IsString()
   @IsOptional()
-  icon?: string;
-
   @IsString()
-  @IsNotEmpty({ message: 'شناسه کاربر اجباری است.' })
-  userId: string;
+  @MaxLength(40)
+  icon?: string;
 }

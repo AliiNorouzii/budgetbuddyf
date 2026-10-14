@@ -1,44 +1,31 @@
-import {
-  IsDateString,
-  IsEnum,
-  IsInt,
-  IsNotEmpty,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Min,
-} from 'class-validator';
-
-export enum TransactionType {
-  INCOME = 'INCOME',
-  EXPENSE = 'EXPENSE',
-}
+import { TransactionType } from '@prisma/client';
+import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { IsRandId } from '../../common/dto';
 
 export class CreateTransactionDto {
-  @IsInt()
-  @Min(1)
-  amount: number;
-
-  @IsEnum(TransactionType)
+  @IsEnum(TransactionType, { message: 'نوع تراکنش نامعتبر است.' })
   type: TransactionType;
 
-  @IsOptional()
-  @IsString()
-  description?: string;
+  /** Toman, positive integer. */
+  @IsInt({ message: 'مبلغ باید عدد صحیح باشد.' })
+  @Min(1, { message: 'مبلغ باید بیشتر از صفر باشد.' })
+  @Max(1_000_000_000_000)
+  amount: number;
 
-  @IsUUID()
-  @IsNotEmpty()
+  @IsRandId()
   accountId: string;
 
   @IsOptional()
-  @IsUUID()
-  categoryId?: string;
+  @ValidateIf((_, v) => v !== null)
+  @IsRandId()
+  categoryId?: string | null;
 
   @IsOptional()
-  @IsDateString()
+  @IsDateString({}, { message: 'تاریخ نامعتبر است.' })
   transactionDate?: string;
 
-  @IsUUID()
-  @IsNotEmpty()
-  userId: string;
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  description?: string;
 }
